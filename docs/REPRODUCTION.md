@@ -14,9 +14,9 @@ Final submission = `submissions/submission_test1_specnchc.zip` (leaderboard **0.
 ├── docs/REPRODUCTION.md            this file (structure + pipeline + per-file + reproduction)
 ├── docs/checkpoints_manifest.tsv   weight prefix → root → stage mapping
 ├── requirements.txt  setup.py      environment (Python 3.14, PyTorch cu130)
-├── fold_df_fixed.csv               (from HF) 5-fold patient-disjoint CV split (25426 rows)
-├── fold_df_pseudo.csv              (from HF) Stage 3 round-1 pseudo-label training table  (+ pseudo_sids.txt)
-├── fold_df_pseudo_spec.csv         (from HF) Stage 4 candidate-specialist training table, 11336 candidates (+ pseudo_sids_spec.txt)
+├── fold_df_fixed.csv               (not included) 5-fold patient-disjoint CV split (25426 rows)
+├── fold_df_pseudo.csv              (not included) Stage 3 round-1 pseudo-label training table  (+ pseudo_sids.txt)
+├── fold_df_pseudo_spec.csv         (not included) Stage 4 candidate-specialist training table, 11336 candidates (+ pseudo_sids_spec.txt)
 ├── neuromm26_baseline/             Python package: models / datasets / tools / utils
 ├── scripts/                        pipeline scripts: precompute / dispatcher / build / gate / analysis
 ├── submissions/                    submission_test1_specnchc.zip — final scored submission (leaderboard 0.9846)

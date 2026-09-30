@@ -8,8 +8,8 @@
 [![Paper](https://img.shields.io/badge/Paper-ACM_MM_2026-b31b1b?style=flat-square)](paper/PushingPastSaturation_NeuroMM2026_Track1.pdf)
 [![AUPRC](https://img.shields.io/badge/Test_AUPRC-0.9846-gold?style=flat-square)](#-results)
 [![Rank](https://img.shields.io/badge/Leaderboard-🥇_1st-gold?style=flat-square)](#-results)
-[![Python](https://img.shields.io/badge/Python-3.14-3776AB?style=flat-square&logo=python&logoColor=white)](#-quick-start)
-[![PyTorch](https://img.shields.io/badge/PyTorch-2.11_cu130-EE4C2C?style=flat-square&logo=pytorch&logoColor=white)](#-quick-start)
+[![Python](https://img.shields.io/badge/Python-3.14-3776AB?style=flat-square&logo=python&logoColor=white)](#-code)
+[![PyTorch](https://img.shields.io/badge/PyTorch-2.11_cu130-EE4C2C?style=flat-square&logo=pytorch&logoColor=white)](#-code)
 [![Weights](https://img.shields.io/badge/🤗_Weights-NeuroMM--T1--weights-blue?style=flat-square)](https://huggingface.co/datasets/GG3BBE0/NeuroMM-T1-weights)
 [![License](https://img.shields.io/badge/License-MIT-green?style=flat-square)](LICENSE)
 
@@ -181,123 +181,21 @@ multi-view model (mean +0.0547); fold 4 is the only non-positive fold in both. A
 yields a larger gain (+0.0318 vs +0.0022 for a weak single-model teacher). We read this as
 **suggestive of partial transfer, not proof** that the gain is free of candidate-specific adaptation.
 
-## 🚀 Quick start
+## 📁 Code
 
-```bash
-# 1. Environment (exact versions pinned in requirements.txt / environment.yml)
-conda create -n neuromm26-baseline python=3.14 && conda activate neuromm26-baseline
-pip install torch==2.11.0 torchvision==0.26.0 --index-url https://download.pytorch.org/whl/cu130
-pip install -r requirements.txt && pip install -e .
-
-# 2. Download checkpoints, out-of-fold predictions, candidate logits and the CV/pseudo-label
-#    tables (~30 GB on disk) into the repo root
-hf download GG3BBE0/NeuroMM-T1-weights --repo-type dataset --local-dir .
-
-# 3. Rebuild the 0.9846 submission from the cached logits (CPU only)
-OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 python scripts/build_specnchc_submission.py
-python scripts/print_specnchc_weights.py      # 43 members, specialists ≈ 0.65 of the weight
-```
-
-`submissions/submission_test1_specnchc.zip` is the **exact file scored at 0.9846**. Because
-Nelder–Mead is non-convex, a rebuild matches it at Spearman 0.9998 with the same score, not
-bit-for-bit. `OMP_NUM_THREADS=1` is required for the NM search.
-
-## 📦 Model checkpoints
-
-Checkpoints are too large for git and live on 🤗 Hugging Face:
-**[`GG3BBE0/NeuroMM-T1-weights`](https://huggingface.co/datasets/GG3BBE0/NeuroMM-T1-weights)**
-(dataset repo). The download restores two directories next to the code:
-
-| Directory | Contents |
-|:---|:---|
-| `neuromm26_results/` | `checkpoints/<prefix>__fold<f>__seed0/best.pt`, `predictions/<prefix>__fold<f>__seed0_oof.npz`, `candidate_arch_logits.npz` (per-arch logits on the 20,000 candidates — the ensemble input) |
-| `neuromm26_real_5fold_result/` | same layout for the remaining multi-view / CWT members |
-
-The same download also places the labelled data tables in the repo root, where the scripts expect
-them: `fold_df_fixed.csv` (5-fold patient-disjoint split, 25,426 windows), `fold_df_pseudo.csv` +
-`pseudo_sids.txt` (Stage-3 table) and `fold_df_pseudo_spec.csv` + `pseudo_sids_spec.txt` (Stage-4
-table, 11,336 candidates). They carry training labels, so they are kept out of this git repository.
-
-Every weight prefix is mapped to its root directory and pipeline stage (`S1_basezoo`, `S3_n2filt`,
-`S4_specnchc`, …) in [`docs/checkpoints_manifest.tsv`](docs/checkpoints_manifest.tsv).
-
-## 📁 Repository layout
-
-<details>
-<summary><b>Click to expand</b></summary>
+This repository contains the full pipeline source for reference; it is shared to document the
+method rather than as a turnkey reproduction package.
 
 ```
-neuromm26_baseline/            Python package (pip install -e .)
-  models/
-    spec_cnn_concat.py         ★ stacked-spectrogram CNN (ConcatSpec)
-    muku_eegnet{,_v2,_v3}.py   ★ multi-view time-domain models
-    spec_cnn.py                single-spectrogram CNN
-    legacy/                    1-D EEG CNNs (EEGNet-style, TCNet, MobileNet, ...)
-  datasets/                    fold datasets (fold = −1 ⇒ always train), augmentation, collate
-  losses/                      focal / BCE losses
-  tools/
-    train_*_fold.py            ★ per-fold trainers for every model family
-    predict_candidate_full_pool.py   ★ candidate inference for the whole pool
-  utils/                       Adan optimizer, AUPRC metrics, seeding, logging
-scripts/                       pipeline scripts, by stage (see docs/REPRODUCTION.md §3)
-  precompute_*.py              Stage 0  feature caches
-  dispatcher_*.py, B_*.sb      Stage 1/3/4  training launchers (local GPU / SLURM)
-  regularized_nm_submission.py Stage 2  regularized Nelder–Mead ensemble
-  build_pseudo_dataset*.py     Stage 3/4  pseudo-label & candidate tables
-  build_specnchc_submission.py Stage 5  ★ builds the 0.9846 submission
-  honest_oof.py, gate_*.py,    validation: nested CV, admission gates,
-  build_private_sim.py         held-out-fold replay
-submissions/                   submission_test1_specnchc.zip — the scored 0.9846 file
-docs/
-  REPRODUCTION.md              stage-by-stage technical notes and per-file map
-  checkpoints_manifest.tsv     weight prefix → root → stage
-assets/                        README figures
-paper/                         camera-ready paper (PDF)
-
-# Restored by `hf download` (not tracked in git):
-neuromm26_results/             checkpoints, OOF predictions, candidate logits
-neuromm26_real_5fold_result/   same, for the remaining members
-fold_df_*.csv, pseudo_sids*.txt  CV split and pseudo-label training tables
+neuromm26_baseline/     models (stacked-spectrogram CNN, multi-view, 1-D CNNs), datasets, losses, trainers
+scripts/                feature precompute, training launchers, Nelder–Mead ensemble,
+                        pseudo-label / candidate-specialist builders, validation (nested CV, held-out-fold replay)
+submissions/            the scored 0.9846 submission
+docs/                   stage-by-stage technical notes (REPRODUCTION.md) and the checkpoint manifest
+paper/                  camera-ready paper (PDF)
 ```
 
-</details>
-
-Scripts resolve the repository root from their own location (or `$NEUROMM_REPO`), and the data
-tables must sit at the root because the scripts reference them there.
-
-## 🔁 Full reproduction (retrain from scratch)
-
-<details>
-<summary><b>Click to expand</b></summary>
-
-1. **Features** — obtain the NeuroMM-2026 Track-1 data from the organizers and cache all
-   representations (> 100 GB): `python scripts/precompute_{filt_eeg,cwt,cwt_paul,cwt_filtered,superlet_gpu,stft}.py`
-2. **Model pool** — train every family on the 5 folds via the `scripts/dispatcher_*.py` launchers
-   (each wraps `neuromm26_baseline/tools/train_*_fold.py`).
-3. **Inductive ensemble (0.9711)** — `python scripts/regnm_real.py`
-4. **Pseudo-label warm-up (0.9778)** — `python scripts/build_pseudo_dataset.py`, retrain the three
-   @256 carriers (`scripts/dispatcher_nchc_pseudo.py`), then `python scripts/build_nchc_submission.py`
-   (writes `submissions/submission_test1_nchc_n2filt.zip`).
-5. **Candidate specialists** —
-   `python scripts/build_pseudo_dataset_iter.py submissions/submission_test1_nchc_n2filt.zip spec 0.60 35`,
-   then train the five specialists with `scripts/dispatcher_nchc_specialist.py`
-   (`--loss focal --focal-gamma 2.0 --noise-weight 1.0`).
-6. **Final ensemble (0.9846)** — `python scripts/build_specnchc_submission.py`
-
-Specialist recipes (all 10 + 30 epochs, focal γ = 2):
-
-| Specialist | Input | Backbone | Size | Batch | LR (frozen / unfrozen) |
-|:---|:---|:---|:-:|:-:|:-:|
-| CWT / Paul / BP-CWT | `cwt`, `cwt_paul`, `cwt_filtered` | `maxvit_rmlp_tiny_rw_256` | 256 | 128 | 1e-3 / 1e-4 |
-| Superlet | `superlet` | `maxvit_tiny_tf_384` | 384 | 96 | 9e-4 / 9e-5 |
-| Multi-view | raw EEG | `convnext_pico` | 224 | 256 | 2e-3 / 2e-4 |
-
-Inductive models were trained on RTX 3090s and the final specialists on H100s; the ensemble rebuild
-runs on CPU. The `B_*.sb` SLURM scripts contain `<your-account>` / `<your-project-id>` /
-`<your-email>` placeholders to fill in for your cluster. Stage-by-stage details are in
-[`docs/REPRODUCTION.md`](docs/REPRODUCTION.md).
-
-</details>
+Trained weights are archived on 🤗 [`GG3BBE0/NeuroMM-T1-weights`](https://huggingface.co/datasets/GG3BBE0/NeuroMM-T1-weights).
 
 ## ⚖️ Scope and rules
 

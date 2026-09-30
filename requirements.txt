@@ -1,0 +1,30 @@
+# NeuroMM-2026 T1 — reproduction environment for the 0.9846 submission.
+# Versions are pinned to the exact training environment (conda env: neuromm26-baseline).
+#
+# Python 3.14.4.  PyTorch is built for CUDA 13.0 (cu130).
+# Install PyTorch from the matching CUDA wheel index FIRST, then the rest:
+#   pip install torch==2.11.0 torchvision==0.26.0 --index-url https://download.pytorch.org/whl/cu130
+#   pip install -r requirements.txt
+# (or `pip install -e .` from this folder, which pulls these in)
+
+# ---- core: required to train the model zoo and reproduce the 0.9846 ensemble ----
+torch==2.11.0
+torchvision==0.26.0
+timm==1.0.26                 # ImageNet-pretrained MaxViT / ConvNeXt backbones
+numpy==2.4.3
+pandas==3.0.2
+scipy==1.17.1                # Nelder-Mead ensemble weighting, signal processing
+scikit-learn==1.8.0          # average_precision_score (AUPRC)
+tqdm==4.67.3
+PyWavelets==1.9.0            # CWT / Paul-wavelet spectrograms (precompute_cwt*.py)
+opencv-python-headless==4.13.0.92  # cv2.resize: spectrogram time-downsample in precompute_cwt*/superlet
+einops==0.8.2
+Pillow==12.2.0
+huggingface-hub==1.14.0      # timm downloads pretrained backbone weights via HF
+safetensors==0.7.0
+
+# ---- optional: only needed by exploratory scripts that are NOT part of the 0.9846 pipeline ----
+# lightgbm==4.6.0
+# PyYAML==6.0.3
+# transformers                 # LaBraM / EEG-foundation-model experiments only
+# opensmile                    # T2/T3 AUDIO feature extraction only (lazy import; never on the T1 0.9846 path)

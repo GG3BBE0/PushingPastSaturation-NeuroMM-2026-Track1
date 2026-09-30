@@ -1,0 +1,79 @@
+#!/bin/bash
+#SBATCH -A <your-project-id>
+#SBATCH --job-name=neuromm_focal
+#SBATCH --output=logs/%x_%j.log
+#SBATCH --error=logs/%x_%j.err
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --gres=gpu:2
+#SBATCH --cpus-per-task=8
+#SBATCH --mem=200G
+#SBATCH --time=24:00:00
+#SBATCH --partition=normal
+#SBATCH --mail-type=END,FAIL
+#SBATCH --mail-user=<your-email>
+
+set -euo pipefail
+
+# ========================================
+# Switches
+# ========================================
+DO_INSTALL=0   # 1 = pip install -e . first run on this server
+DO_TRAIN=1
+# PILOT / POS_WEIGHT are set INSIDE dispatcher_nchc_focal.py:
+#   first run  → PILOT=1 (2 jobs, ±pos_weight on ConcatSuperlet maxvit384 fold0)
+#   then look at the 2 OOF, pick pos_weight, set PILOT=0 + POS_WEIGHT={1,0}, resubmit
+
+# ========================================
+# EDIT IF LAYOUT DIFFERS
+# ========================================
+WORK_ROOT=/work/<your-account>
+REPO_DIR=$WORK_ROOT/NeuroMM-2026_Baseline
+CONDA_ENV=neuromm26-baseline
+# ========================================
+
+ml purge
+ml load cuda/12.4
+source /work/HPC_software/LMOD/miniconda3/miniconda3_app/24.11.1/etc/profile.d/conda.sh
+conda activate "$CONDA_ENV"
+PY=$(which python)
+
+echo "==============================="; echo "Job $SLURM_JOB_ID on $(hostname)  GPUs=$CUDA_VISIBLE_DEVICES  $(date)"; echo "==============================="
+nvidia-smi --list-gpus
+cd "$REPO_DIR"
+
+if [[ $DO_INSTALL -eq 1 ]]; then echo "===== INSTALL ====="; pip install -e . --no-deps; fi
+
+# caches needed by the 4 focal carriers
+for sub in superlet cwt cwt_paul cwt_filtered; do
+    d="$REPO_DIR/neuromm26_datasets/processed/features/$sub"
+    n=$(ls "$d"/*.npy 2>/dev/null | wc -l)
+    echo "cache $sub: $n"
+    if [[ $n -lt 25000 ]]; then echo "FATAL: cache $sub incomplete ($n) — scp it first"; exit 1; fi
+done
+
+# patch dispatcher REPO/PY/GPUS=[0,1]
+DISP=$REPO_DIR/scripts/dispatcher_nchc_focal.py
+python - <<PYEOF
+import re, pathlib
+p = pathlib.Path("$DISP"); s = p.read_text()
+s = re.sub(r'REPO="[^"]+"', f'REPO="$REPO_DIR"', s)
+s = re.sub(r'PY="[^"]+"', f'PY="$PY"', s)
+s = re.sub(r'GPUS=\[[^\]]+\]', 'GPUS=[0,1]', s)
+p.write_text(s); print("patched REPO/PY/GPUS")
+PYEOF
+grep -E '^REPO=|^PY=|^GPUS=|^PILOT=|^POS_WEIGHT=' "$DISP"
+
+if [[ $DO_TRAIN -eq 1 ]]; then
+    echo "===== TRAIN focal (see PILOT/POS_WEIGHT in dispatcher) ====="
+    mkdir -p neuromm26_results/logs
+    $PY scripts/dispatcher_nchc_focal.py
+fi
+echo "Finished: $(date)"
+
+# ========================================
+# Outputs to send back (full rollout, pos_weight=on example):
+#   neuromm26_results/predictions/concat_{superlet,cwt_paul,cwt,cwt_filtered}_focal_fold__*__fold{0-4}__seed0_oof.npz
+#   neuromm26_results/checkpoints/concat_{...}_focal_fold__*__fold{0-4}__seed0/best.pt
+# (pilot variant adds _nopw suffix)
+# ========================================

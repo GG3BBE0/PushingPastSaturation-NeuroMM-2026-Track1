@@ -1,0 +1,60 @@
+#!/bin/bash
+#SBATCH -A <your-project-id>
+#SBATCH --job-name=neuromm_focal_muku
+#SBATCH --output=logs/%x_%j.log
+#SBATCH --error=logs/%x_%j.err
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --gres=gpu:2
+#SBATCH --cpus-per-task=8
+#SBATCH --mem=200G
+#SBATCH --time=12:00:00
+#SBATCH --partition=normal
+#SBATCH --mail-type=END,FAIL
+#SBATCH --mail-user=<your-email>
+set -euo pipefail
+
+DO_INSTALL=0
+# PILOT / POS_WEIGHT set inside dispatcher_nchc_focal_muku.py
+#   first run → PILOT=1 (2 jobs, ±pos_weight on muku raw convnext_pico fold0)
+#   then pick pos_weight, set PILOT=0 + POS_WEIGHT={1,0}, resubmit
+WORK_ROOT=/work/<your-account>
+REPO_DIR=$WORK_ROOT/NeuroMM-2026_Baseline
+CONDA_ENV=neuromm26-baseline
+
+ml purge; ml load cuda/12.4
+source /work/HPC_software/LMOD/miniconda3/miniconda3_app/24.11.1/etc/profile.d/conda.sh
+conda activate "$CONDA_ENV"
+PY=$(which python)
+echo "Job $SLURM_JOB_ID on $(hostname) GPUs=$CUDA_VISIBLE_DEVICES $(date)"; nvidia-smi --list-gpus
+cd "$REPO_DIR"
+[[ $DO_INSTALL -eq 1 ]] && pip install -e . --no-deps || true
+
+# filt_eeg is DERIVED from eeg by the filter pipeline (~15s) — regenerate if missing
+FE="$REPO_DIR/neuromm26_datasets/processed/features/filt_eeg"
+nfe=$(ls "$FE"/*.npy 2>/dev/null | wc -l) || true
+if [[ "${nfe:-0}" -lt 25000 ]]; then
+    echo "filt_eeg cache=${nfe:-0} → regenerating from eeg (~15s)"
+    $PY scripts/precompute_filt_eeg.py
+fi
+# robust cache check (|| true so a missing dir prints a clean FATAL, not a silent set-e death)
+for sub in eeg filt_eeg; do
+    n=$(ls "$REPO_DIR/neuromm26_datasets/processed/features/$sub"/*.npy 2>/dev/null | wc -l) || true
+    echo "cache $sub: ${n:-0}"
+    if [[ "${n:-0}" -lt 25000 ]]; then echo "FATAL: cache $sub missing/incomplete (${n:-0})"; exit 1; fi
+done
+
+DISP=$REPO_DIR/scripts/dispatcher_nchc_focal_muku.py
+python - <<PYEOF
+import re, pathlib
+p=pathlib.Path("$DISP"); s=p.read_text()
+s=re.sub(r'REPO="[^"]+"', f'REPO="$REPO_DIR"', s)
+s=re.sub(r'PY="[^"]+"', f'PY="$PY"', s)
+s=re.sub(r'GPUS=\[[^\]]+\]', 'GPUS=[0,1]', s)
+p.write_text(s); print("patched")
+PYEOF
+grep -E '^REPO=|^PY=|^GPUS=|^PILOT=|^POS_WEIGHT=' "$DISP"
+mkdir -p neuromm26_results/logs
+$PY scripts/dispatcher_nchc_focal_muku.py
+echo "Finished: $(date)"
+# results: neuromm26_results/{predictions,checkpoints}/muku_focal*_fold__convnext_pico_d1_in1k__fold*__seed0*

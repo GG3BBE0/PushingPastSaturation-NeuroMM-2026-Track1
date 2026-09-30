@@ -1,0 +1,22 @@
+# Large artifacts hosted on Hugging Face (GG3BBE0/NeuroMM-T1-weights)
+neuromm26_results/
+neuromm26_real_5fold_result/
+# Data / feature caches (obtain from the NeuroMM-2026 organizers)
+neuromm26_datasets/
+*.npz
+*.pt
+*.tar
+*.tar.gz
+# Rebuild outputs
+submission_test1_*.csv
+# Python / tooling
+__pycache__/
+*.py[cod]
+*.egg-info/
+.ipynb_checkpoints/
+logs/
+*.log
+.DS_Store
+# Labelled data tables (hosted with the weights on Hugging Face)
+fold_df_*.csv
+pseudo_sids*.txt

@@ -1,0 +1,105 @@
+#!/bin/bash
+#SBATCH -A <your-project-id>
+#SBATCH --job-name=neuromm_B_heavyaug
+#SBATCH --output=logs/%x_%j.log
+#SBATCH --error=logs/%x_%j.err
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --gres=gpu:2
+#SBATCH --cpus-per-task=8
+#SBATCH --mem=200G
+#SBATCH --time=48:00:00
+#SBATCH --partition=normal
+#SBATCH --mail-type=END,FAIL
+#SBATCH --mail-user=<your-email>
+
+set -euo pipefail
+
+# ========================================
+# Switches
+# ========================================
+DO_EXTRACT=0   # already transferred the full folder, no tarball to extract
+DO_INSTALL=0   # was 1 on first run; set 0 on resume to skip pip install
+DO_TRAIN=1     # 1 = run dispatcher (15 jobs total; dispatcher auto-skips done folds)
+
+# ========================================
+# EDIT IF YOUR LAYOUT DIFFERS
+# ========================================
+WORK_ROOT=/work/<your-account>
+REPO_DIR=$WORK_ROOT/NeuroMM-2026_Baseline   # the folder you scp'd
+CONDA_ENV=neuromm26-baseline                # match the env you created on NCHC
+# ========================================
+
+# Environment
+ml purge
+ml load cuda/12.4
+source /work/HPC_software/LMOD/miniconda3/miniconda3_app/24.11.1/etc/profile.d/conda.sh
+conda activate "$CONDA_ENV"
+
+PY=$(which python)
+
+echo "==============================="
+echo "Job ID  : $SLURM_JOB_ID"
+echo "Node    : $(hostname)"
+echo "GPUs    : $CUDA_VISIBLE_DEVICES"
+echo "Started : $(date)"
+echo "Python  : $PY"
+echo "==============================="
+nvidia-smi --list-gpus
+
+# ========================================
+# 0. (legacy) Extract tarball — not used, repo was transferred as a folder
+# ========================================
+if [[ $DO_EXTRACT -eq 1 ]]; then
+    echo "===== EXTRACT (legacy path) ====="
+    mkdir -p "$REPO_DIR"
+    tar -xf "${TAR_FILE:-/dev/null}" -C "$REPO_DIR"
+fi
+
+cd "$REPO_DIR"
+
+# ========================================
+# 0.5 Make package importable (first run only)
+# ========================================
+if [[ $DO_INSTALL -eq 1 ]]; then
+    echo "===== INSTALL (pip install -e . --no-deps) ====="
+    pip install -e . --no-deps
+fi
+
+# ========================================
+# Patch dispatcher GPU list + paths
+# (SLURM gives us CUDA_VISIBLE_DEVICES=0,1 inside the job)
+# ========================================
+DISPATCHER=$REPO_DIR/scripts/dispatcher_B_heavyaug_rollout.py
+python - <<PYEOF
+import re, pathlib
+p = pathlib.Path("$DISPATCHER")
+s = p.read_text()
+s = re.sub(r'REPO = "[^"]+"', f'REPO = "$REPO_DIR"', s)
+s = re.sub(r'PY = "[^"]+"', f'PY = "$PY"', s)
+s = re.sub(r'GPUS = \[[^\]]+\]', 'GPUS = [0, 1]', s)
+p.write_text(s)
+print("patched dispatcher: REPO, PY, GPUS=[0,1]")
+PYEOF
+head -15 "$DISPATCHER" | grep -E "REPO|PY|GPUS"
+
+# ========================================
+# 1. Train: 15 jobs (3 spec views x 5 fold) on 2 GPUs
+# ========================================
+if [[ $DO_TRAIN -eq 1 ]]; then
+    echo "===== TRAIN B-heavyaug (maxvit_tf_384 with heavy SpecAug on Paul/Filt/CWT, 15 jobs) ====="
+    mkdir -p neuromm26_results/logs
+    $PY scripts/dispatcher_B_heavyaug_rollout.py
+fi
+
+echo "Finished: $(date)"
+
+# ========================================
+# Collect outputs to send back to original machine:
+#   neuromm26_results/predictions/concat_{cwt_paul,cwt_filtered,cwt}_heavyaug_fold__maxvit_tiny_tf_384_in1k__fold{0-4}__seed0_oof.npz   (15 files)
+#   neuromm26_results/checkpoints/concat_{cwt_paul,cwt_filtered,cwt}_heavyaug_fold__maxvit_tiny_tf_384_in1k__fold{0-4}__seed0/best.pt  (15 files)
+# Example tar command (run on login node after job finishes):
+#   tar -czf B_heavyaug_results.tar.gz \
+#     neuromm26_results/predictions/concat_{cwt_paul,cwt_filtered,cwt}_heavyaug_fold__maxvit_tiny_tf_384_in1k__fold*__seed0_oof.npz \
+#     neuromm26_results/checkpoints/concat_{cwt_paul,cwt_filtered,cwt}_heavyaug_fold__maxvit_tiny_tf_384_in1k__fold*__seed0
+# ========================================

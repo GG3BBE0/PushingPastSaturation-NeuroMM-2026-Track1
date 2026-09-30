@@ -1,0 +1,55 @@
+#!/bin/bash
+# NCHC big pseudo-label retrain (6 top arches x 5 folds on fold_df_pseudo). 2xH100.
+#   transfer into $REPO_DIR before sbatch (see scripts/README_pseudo_transfer.md):
+#     scripts/{build_pseudo_dataset.py,dispatcher_nchc_pseudo.py,B_nchc_pseudo.sb}
+#     submissions/submission_test1_regnm_v3.zip   (the pseudo-label source)
+#     the updated neuromm26_baseline/tools/train_spec_concat_fold.py  (has --noise-sids/--relabel)
+#   REQUIRES candidate feature caches on NCHC: NeuroMM-2026/candidate/candidate/{cwt,cwt_paul,
+#     cwt_filtered,stft,superlet}/  (build_pseudo symlinks them into the train dirs).
+#   then: sbatch scripts/B_nchc_pseudo.sb  -> returns concat_*_pseudo_fold__*  OOF + ckpts
+#SBATCH -A <your-project-id>
+#SBATCH --job-name=neuromm_pseudo
+#SBATCH --output=logs/%x_%j.log
+#SBATCH --error=logs/%x_%j.err
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --gres=gpu:2
+#SBATCH --cpus-per-task=16
+#SBATCH --mem=200G
+#SBATCH --time=24:00:00
+#SBATCH --partition=normal
+#SBATCH --mail-type=END,FAIL
+#SBATCH --mail-user=<your-email>
+set -euo pipefail
+
+DO_INSTALL=0
+WORK_ROOT=/work/<your-account>
+REPO_DIR=$WORK_ROOT/NeuroMM-2026_Baseline
+CONDA_ENV=neuromm26-baseline
+
+ml purge; ml load cuda/12.4
+source /work/HPC_software/LMOD/miniconda3/miniconda3_app/24.11.1/etc/profile.d/conda.sh
+conda activate "$CONDA_ENV"
+PY=$(which python)
+echo "Job $SLURM_JOB_ID on $(hostname) GPUs=$CUDA_VISIBLE_DEVICES $(date)"; nvidia-smi --list-gpus
+cd "$REPO_DIR"
+[[ $DO_INSTALL -eq 1 ]] && pip install -e . --no-deps || true
+
+# guards: train spec caches + candidate spec caches (build_pseudo symlinks candidate->train)
+for s in cwt cwt_paul cwt_filtered stft superlet; do
+  nt=$(ls "$REPO_DIR/neuromm26_datasets/processed/features/$s"/*.npy 2>/dev/null | wc -l) || true
+  nc=$(ls "$REPO_DIR/NeuroMM-2026/candidate/candidate/$s"/*.npy 2>/dev/null | wc -l) || true
+  echo "cache $s: train=${nt:-0} candidate=${nc:-0}"
+  if [[ "${nt:-0}" -lt 25000 ]]; then echo "FATAL: train $s cache missing"; exit 1; fi
+  if [[ "${nc:-0}" -lt 19000 ]]; then echo "FATAL: candidate $s cache missing -> scp it to NCHC first"; exit 1; fi
+done
+
+# build pseudo dataset on NCHC (rebuilds fold_df_pseudo.csv + pseudo_sids.txt + symlinks candidate feats)
+$PY scripts/build_pseudo_dataset.py
+wc -l "$REPO_DIR/fold_df_pseudo.csv" "$REPO_DIR/pseudo_sids.txt"
+
+# patch dispatcher REPO/PY/GPUS for NCHC, then run
+DISP=$REPO_DIR/scripts/dispatcher_nchc_pseudo.py
+REPO_DIR="$REPO_DIR" PY="$PY" $PY scripts/dispatcher_nchc_pseudo.py
+echo "Finished: $(date)"
+# results: neuromm26_results/{predictions,checkpoints}/concat_*_pseudo_fold__*

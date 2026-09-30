@@ -1,0 +1,53 @@
+#!/bin/bash
+# NCHC candidate-SPECIALIST round-3 (teacher = specnchc public 0.9846, the current best). 2xH100.
+# 5 arch x 5 fold = 25 jobs. Proven lever: 0.9778->0.9818->0.9846, each better teacher jumped the score.
+#   transfer into $REPO_DIR before sbatch (0611_spec3_transfer.tar.gz unpacks these):
+#     scripts/{build_pseudo_dataset_iter.py,dispatcher_nchc_specialist3.py,B_nchc_specialist3.sb}
+#     submissions/submission_test1_specnchc.zip   (the 0.9846 label source / teacher)
+#     neuromm26_baseline/tools/{train_spec_concat_fold.py,train_muku_fold.py}
+#   REQUIRES candidate caches on NCHC: NeuroMM-2026/candidate/candidate/{cwt,cwt_paul,cwt_filtered,superlet,eeg}/
+#   then: sbatch scripts/B_nchc_specialist3.sb
+#SBATCH -A <your-project-id>
+#SBATCH --job-name=neuromm_spec3
+#SBATCH --output=logs/%x_%j.log
+#SBATCH --error=logs/%x_%j.err
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --gres=gpu:2
+#SBATCH --cpus-per-task=16
+#SBATCH --mem=200G
+#SBATCH --time=24:00:00
+#SBATCH --partition=normal
+#SBATCH --mail-type=END,FAIL
+#SBATCH --mail-user=<your-email>
+set -euo pipefail
+
+WORK_ROOT=/work/<your-account>
+REPO_DIR=$WORK_ROOT/NeuroMM-2026_Baseline
+CONDA_ENV=neuromm26-baseline
+
+ml purge; ml load cuda/12.4
+source /work/HPC_software/LMOD/miniconda3/miniconda3_app/24.11.1/etc/profile.d/conda.sh
+conda activate "$CONDA_ENV"
+PY=$(which python)
+echo "Job $SLURM_JOB_ID on $(hostname) GPUs=$CUDA_VISIBLE_DEVICES $(date)"; nvidia-smi --list-gpus
+cd "$REPO_DIR"
+
+# guards: concat needs cwt/paul/filt/superlet; muku needs eeg
+for s in cwt cwt_paul cwt_filtered superlet eeg; do
+  nt=$(ls "$REPO_DIR/neuromm26_datasets/processed/features/$s"/*.npy 2>/dev/null | wc -l) || true
+  nc=$(ls "$REPO_DIR/NeuroMM-2026/candidate/candidate/$s"/*.npy 2>/dev/null | wc -l) || true
+  echo "cache $s: train=${nt:-0} candidate=${nc:-0}"
+  if [[ "${nt:-0}" -lt 25000 ]]; then echo "FATAL: train $s cache missing"; exit 1; fi
+  if [[ "${nc:-0}" -lt 19000 ]]; then echo "FATAL: candidate $s cache missing -> scp it to NCHC first"; exit 1; fi
+done
+
+# build the round-3 specialist dataset on NCHC (teacher = specnchc 0.9846, HI=0.60, neg bottom 35%)
+echo "== building round-3 candidate-specialist dataset (teacher=specnchc 0.9846, HI=0.60, neg bottom 35%) =="
+$PY scripts/build_pseudo_dataset_iter.py submissions/submission_test1_specnchc.zip spec3 0.60 35
+wc -l "$REPO_DIR"/fold_df_pseudo_spec3.csv "$REPO_DIR"/pseudo_sids_spec3.txt
+
+REPO_DIR="$REPO_DIR" PY="$PY" $PY scripts/dispatcher_nchc_specialist3.py
+echo "Finished: $(date)"
+# results: neuromm26_results/{predictions,checkpoints}/{concat_*_spec3nchc_fold__*, muku_spec3nchc_fold__*}
+#   scp back the 25 _oof.npz (+ 25 best.pt); locally: gate_specnchc-style build -> probe public.

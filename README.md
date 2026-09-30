@@ -80,6 +80,17 @@ Spikes are brief, sharp transients that often appear across neighbouring channel
 morphology and sit on top of patient-specific background activity — which is why the system looks
 at every window through several time–frequency representations rather than one.
 
+The same spike window as the stacked-spectrogram models see it: each channel's time–frequency map
+(the spike is the bright vertical burst at the centre of ch 0 and ch 10) is stacked along frequency
+into one tall image and resized into a single square input for an ImageNet-pretrained backbone.
+
+<div align="center">
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="assets/concatspec_dark.png">
+  <img src="assets/concatspec_light.png" width="100%" alt="Per-channel CWT maps are stacked into a 1664x256 image and resized to 256x256 for the backbone">
+</picture>
+</div>
+
 ## 🧠 Architecture
 
 <div align="center">

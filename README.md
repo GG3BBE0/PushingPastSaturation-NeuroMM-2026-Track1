@@ -7,7 +7,7 @@
 
 [![Paper](https://img.shields.io/badge/Paper-ACM_MM_2026-b31b1b?style=flat-square)](paper/PushingPastSaturation_NeuroMM2026_Track1.pdf)
 [![AUPRC](https://img.shields.io/badge/Test_AUPRC-0.9846-gold?style=flat-square)](https://www.codabench.org/competitions/16437/#/results-tab)
-[![Rank](https://img.shields.io/badge/Leaderboard-🥇_1st_of_38-gold?style=flat-square)](https://www.codabench.org/competitions/16437/#/results-tab)
+[![Rank](https://img.shields.io/badge/Leaderboard-🥇_1st-gold?style=flat-square)](https://www.codabench.org/competitions/16437/#/results-tab)
 [![Python](https://img.shields.io/badge/Python-3.14-3776AB?style=flat-square&logo=python&logoColor=white)](#-code)
 [![PyTorch](https://img.shields.io/badge/PyTorch-2.11_cu130-EE4C2C?style=flat-square&logo=pytorch&logoColor=white)](#-code)
 [![Weights](https://img.shields.io/badge/🤗_Weights-NeuroMM--T1--weights-blue?style=flat-square)](https://huggingface.co/datasets/GG3BBE0/NeuroMM-T1-weights)
@@ -37,7 +37,7 @@ self-training** — many confident candidates, committed at **full weight**, aud
 
 ## 🏆 Results
 
-**🥇 1st of 38 teams** on the official Track-1 Test-Phase leaderboard — [Codabench, NeuroMM-2026 Track 1 (NMM-Basic-IED) → Results](https://www.codabench.org/competitions/16437/#/results-tab) (team `aicv1`, AUPRC **0.9846**).
+**🥇 1st place** on the official Track-1 Test-Phase leaderboard — [Codabench, NeuroMM-2026 Track 1 (NMM-Basic-IED) → Results](https://www.codabench.org/competitions/16437/#/results-tab) (team `aicv1`, AUPRC **0.9846**).
 
 | Stage | Leaderboard AUPRC | Regime |
 |:---|:---:|:---:|

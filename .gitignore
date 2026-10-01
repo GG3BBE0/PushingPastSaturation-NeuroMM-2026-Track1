@@ -17,6 +17,6 @@ __pycache__/
 logs/
 *.log
 .DS_Store
-# Labelled data tables (hosted with the weights on Hugging Face)
+# Labelled data tables (not distributed)
 fold_df_*.csv
 pseudo_sids*.txt

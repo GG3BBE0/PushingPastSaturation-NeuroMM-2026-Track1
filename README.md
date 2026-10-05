@@ -13,9 +13,11 @@
 [![Weights](https://img.shields.io/badge/🤗_Weights-NeuroMM--T1--weights-blue?style=flat-square)](https://huggingface.co/datasets/GG3BBE0/NeuroMM-T1-weights)
 [![License](https://img.shields.io/badge/License-MIT-green?style=flat-square)](LICENSE)
 
-*Ming-Chun Chiang · Kuan-Chuan Peng · Bo-Yun Yu · Jun-Wei Hsieh*
+*Ming-Chun Chiang · Kuan-Chuan Peng · Bo-Yun Yu · Jun-Wei Hsieh*<sup>✉</sup>
 
 National Yang Ming Chiao Tung University · Mitsubishi Electric Research Laboratories
+
+<sup>✉</sup> Corresponding author: Jun-Wei Hsieh (jwhsieh@nycu.edu.tw)
 
 </div>
 
@@ -209,7 +211,7 @@ scripts/                feature precompute, training launchers, Nelder–Mead en
                         pseudo-label / candidate-specialist builders, validation (nested CV, held-out-fold replay)
 submissions/            the scored 0.9846 submission
 docs/                   stage-by-stage technical notes (REPRODUCTION.md) and the checkpoint manifest
-paper/                  camera-ready paper (PDF)
+paper/                  published paper (PDF)
 ```
 
 Trained weights are archived on 🤗 [`GG3BBE0/NeuroMM-T1-weights`](https://huggingface.co/datasets/GG3BBE0/NeuroMM-T1-weights).
@@ -237,4 +239,4 @@ for the challenge and data.
 
 The paper appears in the Proceedings of the 34th ACM International Conference on Multimedia
 (MM '26), DOI [10.1145/3767308.3837695](https://doi.org/10.1145/3767308.3837695) (active once the
-proceedings are published); the camera-ready PDF is in [`paper/`](paper/).
+proceedings are published); the published PDF is in [`paper/`](paper/).
